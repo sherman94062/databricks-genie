@@ -16,7 +16,7 @@ from typing import Iterator, Optional
 
 DEFAULT_DB_PATH = Path(os.environ.get("GENIE_SESSION_DB", ".genie_session.sqlite"))
 
-SCHEMA = """
+TABLE_DDL = """
 CREATE TABLE IF NOT EXISTS calls (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts_start_utc REAL NOT NULL,
@@ -33,11 +33,14 @@ CREATE TABLE IF NOT EXISTS calls (
     statement_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_calls_ts ON calls(ts_start_utc);
-CREATE INDEX IF NOT EXISTS idx_calls_stmt ON calls(statement_id);
 """
 
 MIGRATIONS = [
     "ALTER TABLE calls ADD COLUMN statement_id TEXT",
+]
+
+POST_MIGRATION_DDL = [
+    "CREATE INDEX IF NOT EXISTS idx_calls_stmt ON calls(statement_id)",
 ]
 
 
@@ -64,12 +67,14 @@ class SessionLog:
 
     def _init(self) -> None:
         with self._conn() as c:
-            c.executescript(SCHEMA)
+            c.executescript(TABLE_DDL)
             for stmt in MIGRATIONS:
                 try:
                     c.execute(stmt)
                 except sqlite3.OperationalError:
                     pass  # already applied
+            for stmt in POST_MIGRATION_DDL:
+                c.execute(stmt)
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
