@@ -146,6 +146,40 @@ def cost(
     console.print(t)
 
 
+@app.command("statement-cost")
+def statement_cost(
+    hours: int = typer.Option(24, "--hours", "-h"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Per-Genie-question cost via statement_id → system.query.history."""
+    _configure_logging(verbose)
+    import time as _t
+
+    since_utc = _t.time() - hours * 3600
+    log = SessionLog()
+    sids = log.statement_ids(since_utc=since_utc)
+    if not sids:
+        console.print(
+            "[yellow]No Genie statement_ids captured in window.[/yellow] "
+            "Run `ask` first; also note statement_id is only populated when Genie "
+            "returns a query result."
+        )
+        return
+
+    reporter = CostReporter(session_log=log)
+    r = reporter.per_statement_history(sids)
+    if not r.rows:
+        console.print(
+            "[yellow]No matching rows in system.query.history yet.[/yellow] "
+            "Query history has a short lag — retry in a minute."
+        )
+        return
+    t = Table(*r.columns)
+    for row in r.rows:
+        t.add_row(*[str(c)[:60] for c in row])
+    console.print(t)
+
+
 def main() -> None:
     app()
 

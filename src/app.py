@@ -124,11 +124,35 @@ def _cost_tab() -> None:
             lambda t: datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         )
         st.dataframe(
-            df[["when_utc", "latency_s", "status", "row_count", "question"]],
+            df[["when_utc", "latency_s", "status", "row_count", "statement_id", "question"]],
             use_container_width=True,
         )
     else:
         st.caption("No activity yet — ask something in the Chat tab.")
+
+    st.divider()
+    st.subheader("Per-question cost (statement_id → query.history)")
+    st.caption(
+        "Looks up each Genie-generated SQL statement in `system.query.history` to get "
+        "authoritative duration, rows read/produced, and bytes read per question."
+    )
+    if st.button("Fetch per-statement history"):
+        sids = log.statement_ids(since_utc=since_utc)
+        if not sids:
+            st.info("No Genie statement_ids captured in window yet.")
+        else:
+            try:
+                reporter = CostReporter(session_log=log)
+                with st.spinner(f"Looking up {len(sids)} statements…"):
+                    r = reporter.per_statement_history(sids)
+                if r.rows:
+                    st.dataframe(
+                        pd.DataFrame(r.rows, columns=r.columns), use_container_width=True
+                    )
+                else:
+                    st.info("No rows yet — query history has a short lag.")
+            except Exception as e:
+                st.error(f"Query history lookup failed: {e}")
 
     st.divider()
     st.subheader("Warehouse billing attribution")

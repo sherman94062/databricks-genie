@@ -40,6 +40,23 @@ GROUP BY u.usage_date, u.sku_name
 ORDER BY u.usage_date DESC, dbus DESC
 """
 
+QUERY_HISTORY_BY_STATEMENT_IDS_SQL = """
+SELECT
+  statement_id,
+  start_time,
+  end_time,
+  total_duration_ms,
+  execution_duration_ms,
+  read_rows,
+  produced_rows,
+  read_bytes,
+  compute.warehouse_id AS warehouse_id,
+  statement_text
+FROM system.query.history
+WHERE statement_id IN ({placeholders})
+ORDER BY start_time DESC
+"""
+
 WAREHOUSE_TOTAL_SINCE_SQL = """
 SELECT
   SUM(u.usage_quantity) AS dbus,
@@ -101,6 +118,17 @@ class CostReporter:
         data = getattr(stmt, "result", None)
         rows = getattr(data, "data_array", None) or [] if data else []
         return CostRow(columns=cols, rows=rows)
+
+    def per_statement_history(self, statement_ids: list[str]) -> CostRow:
+        """Look up query history for specific statement_ids captured from Genie."""
+        if not statement_ids:
+            return CostRow(columns=[], rows=[])
+        placeholders = ",".join(f":sid{i}" for i in range(len(statement_ids)))
+        params = {f"sid{i}": sid for i, sid in enumerate(statement_ids)}
+        return self._execute(
+            QUERY_HISTORY_BY_STATEMENT_IDS_SQL.format(placeholders=placeholders),
+            params,
+        )
 
     def warehouse_spend_since(self, since_utc: float) -> CostRow:
         """Total DBUs + est. USD on this warehouse since `since_utc`."""

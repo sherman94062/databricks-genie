@@ -36,6 +36,7 @@ class GenieResult:
     sql: Optional[str]
     columns: list[str]
     rows: list[list[Any]]
+    statement_id: Optional[str]
     raw_message: Any
     raw_result: Any
 
@@ -96,6 +97,7 @@ class GenieClient:
                         status=result.status if result else "ERROR",
                         row_count=len(result.rows) if result else 0,
                         error=error,
+                        statement_id=result.statement_id if result else None,
                     )
                 )
 
@@ -148,6 +150,7 @@ class GenieClient:
         sql = None
         columns: list[str] = []
         rows: list[list[Any]] = []
+        statement_id: Optional[str] = None
         raw_result = None
 
         for attachment in getattr(msg, "attachments", None) or []:
@@ -157,6 +160,11 @@ class GenieClient:
             query = getattr(attachment, "query", None)
             if query is not None:
                 sql = getattr(query, "query", None) or getattr(query, "sql", None)
+                statement_id = (
+                    getattr(query, "statement_id", None)
+                    or getattr(query, "query_id", None)
+                    or statement_id
+                )
 
         status = str(getattr(msg, "status", "")).upper()
         if "COMPLETED" in status:
@@ -168,6 +176,7 @@ class GenieClient:
                 )
                 sr = getattr(raw_result, "statement_response", None)
                 if sr is not None:
+                    statement_id = getattr(sr, "statement_id", None) or statement_id
                     manifest = getattr(sr, "manifest", None)
                     schema = getattr(manifest, "schema", None) if manifest else None
                     if schema is not None:
@@ -186,6 +195,7 @@ class GenieClient:
             sql=sql,
             columns=columns,
             rows=rows,
+            statement_id=statement_id,
             raw_message=msg,
             raw_result=raw_result,
         )

@@ -29,10 +29,16 @@ CREATE TABLE IF NOT EXISTS calls (
     question TEXT NOT NULL,
     status TEXT NOT NULL,
     row_count INTEGER NOT NULL DEFAULT 0,
-    error TEXT
+    error TEXT,
+    statement_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_calls_ts ON calls(ts_start_utc);
+CREATE INDEX IF NOT EXISTS idx_calls_stmt ON calls(statement_id);
 """
+
+MIGRATIONS = [
+    "ALTER TABLE calls ADD COLUMN statement_id TEXT",
+]
 
 
 @dataclass
@@ -48,6 +54,7 @@ class CallRecord:
     status: str
     row_count: int
     error: Optional[str] = None
+    statement_id: Optional[str] = None
 
 
 class SessionLog:
@@ -58,6 +65,11 @@ class SessionLog:
     def _init(self) -> None:
         with self._conn() as c:
             c.executescript(SCHEMA)
+            for stmt in MIGRATIONS:
+                try:
+                    c.execute(stmt)
+                except sqlite3.OperationalError:
+                    pass  # already applied
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
@@ -73,12 +85,13 @@ class SessionLog:
             cur = c.execute(
                 """INSERT INTO calls(ts_start_utc, ts_end_utc, latency_s, space_id,
                    warehouse_id, conversation_id, message_id, question, status,
-                   row_count, error)
-                   VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                   row_count, error, statement_id)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     rec.ts_start_utc, rec.ts_end_utc, rec.latency_s, rec.space_id,
                     rec.warehouse_id, rec.conversation_id, rec.message_id,
                     rec.question, rec.status, rec.row_count, rec.error,
+                    rec.statement_id,
                 ),
             )
             return int(cur.lastrowid or 0)
@@ -109,6 +122,16 @@ class SessionLog:
                     row,
                 )
             )
+
+    def statement_ids(self, since_utc: Optional[float] = None) -> list[str]:
+        since = since_utc or 0.0
+        with self._conn() as c:
+            rows = c.execute(
+                """SELECT statement_id FROM calls
+                   WHERE ts_start_utc >= ? AND statement_id IS NOT NULL""",
+                (since,),
+            ).fetchall()
+            return [r[0] for r in rows if r[0]]
 
     def time_windows(self, since_utc: Optional[float] = None) -> list[tuple[float, float]]:
         """Return (start, end) epoch pairs for every completed call."""
