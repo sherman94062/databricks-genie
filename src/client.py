@@ -17,6 +17,8 @@ from typing import Any, Optional
 
 from databricks.sdk import WorkspaceClient
 
+from .session_log import CallRecord, SessionLog, now_utc
+
 log = logging.getLogger(__name__)
 
 TERMINAL_STATES = {"COMPLETED", "FAILED", "CANCELLED"}
@@ -49,6 +51,8 @@ class GenieClient:
         workspace: Optional[WorkspaceClient] = None,
         poll_interval_s: float = DEFAULT_POLL_INTERVAL_S,
         timeout_s: float = DEFAULT_TIMEOUT_S,
+        session_log: Optional[SessionLog] = None,
+        warehouse_id: Optional[str] = None,
     ):
         self.space_id = space_id or os.environ.get("GENIE_SPACE_ID")
         if not self.space_id:
@@ -56,6 +60,8 @@ class GenieClient:
         self.w = workspace or WorkspaceClient()
         self.poll_interval_s = poll_interval_s
         self.timeout_s = timeout_s
+        self.session_log = session_log
+        self.warehouse_id = warehouse_id or os.environ.get("DATABRICKS_WAREHOUSE_ID")
 
     def list_spaces(self) -> list[Any]:
         resp = self.w.genie.list_spaces()
@@ -65,6 +71,35 @@ class GenieClient:
 
     def ask(self, question: str, conversation_id: Optional[str] = None) -> GenieResult:
         """Ask a question. Starts a new conversation unless conversation_id is given."""
+        ts_start = now_utc()
+        error: Optional[str] = None
+        result: Optional[GenieResult] = None
+        try:
+            result = self._ask_impl(question, conversation_id)
+            return result
+        except Exception as e:
+            error = f"{type(e).__name__}: {e}"
+            raise
+        finally:
+            if self.session_log is not None:
+                ts_end = now_utc()
+                self.session_log.record(
+                    CallRecord(
+                        ts_start_utc=ts_start,
+                        ts_end_utc=ts_end,
+                        latency_s=ts_end - ts_start,
+                        space_id=str(self.space_id),
+                        warehouse_id=self.warehouse_id,
+                        conversation_id=result.conversation_id if result else None,
+                        message_id=result.message_id if result else None,
+                        question=question,
+                        status=result.status if result else "ERROR",
+                        row_count=len(result.rows) if result else 0,
+                        error=error,
+                    )
+                )
+
+    def _ask_impl(self, question: str, conversation_id: Optional[str]) -> GenieResult:
         if conversation_id:
             log.debug("Sending follow-up to conversation %s", conversation_id)
             resp = self._retry(
