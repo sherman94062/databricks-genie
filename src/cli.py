@@ -180,6 +180,64 @@ def statement_cost(
     console.print(t)
 
 
+@app.command("genie-vs-warehouse")
+def genie_vs_warehouse(
+    days: int = typer.Option(30, "--days", "-d"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Split billing into Genie-LLM vs warehouse-compute — the key number for
+    deciding whether to move NL->SQL into your own Python agent."""
+    _configure_logging(verbose)
+    import time as _t
+
+    since_utc = _t.time() - days * 86400
+    reporter = CostReporter(session_log=SessionLog())
+    try:
+        result = reporter.genie_vs_warehouse(since_utc)
+    except Exception as e:
+        console.print(f"[red]Failed:[/red] {e}")
+        console.print(
+            "[dim]system.billing may not be enabled on this workspace. "
+            "On Free Edition this is often restricted.[/dim]"
+        )
+        raise typer.Exit(1)
+
+    usd = result["totals_usd"]
+    dbus = result["totals_dbus"]
+
+    summary = Table("component", "DBUs", "est. USD", "what it is")
+    labels = {
+        "genie_llm": "NL->SQL generation (goes away if you move to Python)",
+        "warehouse_compute": "SQL execution (same cost either way)",
+        "other": "unclassified — inspect detail",
+    }
+    for k in ("genie_llm", "warehouse_compute", "other"):
+        summary.add_row(
+            k,
+            f"{dbus.get(k, 0):.2f}",
+            f"${usd.get(k, 0):.2f}",
+            labels[k],
+        )
+    console.print(summary)
+
+    console.print(f"\n[bold]Period:[/bold] last {days} days")
+    console.print(
+        f"[bold]Replaceable spend (Genie LLM only):[/bold] "
+        f"[yellow]${usd.get('genie_llm', 0):.2f}[/yellow]"
+    )
+    console.print(
+        "[dim]Compare against your projected Python-side LLM cost "
+        "(~$0.01–0.02 per NL->SQL call on Claude Sonnet 4.6) × question volume.[/dim]"
+    )
+
+    if verbose and result["detail"].rows:
+        console.print("\n[bold]Per-SKU detail:[/bold]")
+        t = Table(*result["detail"].columns)
+        for row in result["detail"].rows:
+            t.add_row(*[str(c) for c in row])
+        console.print(t)
+
+
 def main() -> None:
     app()
 

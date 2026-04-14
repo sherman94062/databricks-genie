@@ -24,6 +24,35 @@ from .session_log import SessionLog
 
 log = logging.getLogger(__name__)
 
+GENIE_VS_WAREHOUSE_SQL = """
+WITH classified AS (
+  SELECT
+    sku_name,
+    CASE
+      WHEN sku_name ILIKE '%genie%' OR sku_name ILIKE '%ai%assist%'
+           OR sku_name ILIKE '%ai_function%' OR sku_name ILIKE '%model_serving%'
+        THEN 'genie_llm'
+      WHEN sku_name ILIKE '%sql%serverless%' OR sku_name ILIKE '%serverless%sql%'
+        THEN 'warehouse_compute'
+      ELSE 'other'
+    END AS component,
+    usage_quantity,
+    usage_quantity * COALESCE(p.pricing.default, 0) AS est_usd
+  FROM system.billing.usage u
+  LEFT JOIN system.billing.list_prices p
+    ON p.sku_name = u.sku_name
+    AND u.usage_end_time >= p.price_start_time
+    AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+  WHERE u.usage_start_time >= :since_ts
+)
+SELECT component, sku_name,
+       SUM(usage_quantity) AS dbus,
+       SUM(est_usd) AS est_usd
+FROM classified
+GROUP BY component, sku_name
+ORDER BY component, dbus DESC
+"""
+
 USAGE_BY_WAREHOUSE_SQL = """
 SELECT
   u.usage_date,
@@ -160,6 +189,26 @@ class CostReporter:
             if scanned > 1000:
                 break
         return CostRow(columns=cols, rows=rows)
+
+    def genie_vs_warehouse(self, since_utc: float) -> dict:
+        """Split spend into Genie-LLM vs warehouse-compute vs other.
+
+        This is the answer to 'is it cheaper to move NL->SQL into Python?' —
+        only the `genie_llm` component goes away if you do.
+        """
+        r = self._execute(GENIE_VS_WAREHOUSE_SQL, {"since_ts": _iso(since_utc)})
+        totals = {"genie_llm": 0.0, "warehouse_compute": 0.0, "other": 0.0}
+        dbus = {"genie_llm": 0.0, "warehouse_compute": 0.0, "other": 0.0}
+        for row in r.rows:
+            component, _sku, d, usd = row[0], row[1], float(row[2] or 0), float(row[3] or 0)
+            totals[component] = totals.get(component, 0.0) + usd
+            dbus[component] = dbus.get(component, 0.0) + d
+        return {
+            "since_utc": since_utc,
+            "totals_usd": totals,
+            "totals_dbus": dbus,
+            "detail": r,
+        }
 
     def warehouse_spend_since(self, since_utc: float) -> CostRow:
         """Total DBUs + est. USD on this warehouse since `since_utc`."""
