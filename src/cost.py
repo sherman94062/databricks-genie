@@ -121,15 +121,45 @@ class CostReporter:
         return CostRow(columns=cols, rows=rows)
 
     def per_statement_history(self, statement_ids: list[str]) -> CostRow:
-        """Look up query history for specific statement_ids captured from Genie."""
+        """Look up query history for specific statement_ids via the Query History API.
+
+        Uses the workspace-level `query_history.list` endpoint (no system-table
+        grants required) and filters client-side by statement_id.
+        """
         if not statement_ids:
             return CostRow(columns=[], rows=[])
-        placeholders = ",".join(f":sid{i}" for i in range(len(statement_ids)))
-        params = {f"sid{i}": sid for i, sid in enumerate(statement_ids)}
-        return self._execute(
-            QUERY_HISTORY_BY_STATEMENT_IDS_SQL.format(placeholders=placeholders),
-            params,
-        )
+        wanted = set(statement_ids)
+
+        cols = [
+            "statement_id", "status", "query_start_time_ms", "duration_ms",
+            "rows_produced", "user_name", "statement_type", "query_text",
+        ]
+        rows: list[list[Any]] = []
+        try:
+            iterator = self.w.query_history.list()
+        except Exception as e:
+            raise RuntimeError(f"query_history.list() failed: {e}") from e
+
+        scanned = 0
+        for q in iterator:
+            scanned += 1
+            qid = getattr(q, "query_id", None) or getattr(q, "statement_id", None)
+            if qid in wanted:
+                rows.append([
+                    qid,
+                    str(getattr(q, "status", "")),
+                    getattr(q, "query_start_time_ms", None),
+                    getattr(q, "duration", None) or getattr(q, "execution_end_time_ms", None),
+                    getattr(q, "rows_produced", None),
+                    getattr(q, "user_name", None),
+                    str(getattr(q, "statement_type", "")),
+                    (getattr(q, "query_text", "") or "")[:120],
+                ])
+                if len(rows) == len(wanted):
+                    break
+            if scanned > 1000:
+                break
+        return CostRow(columns=cols, rows=rows)
 
     def warehouse_spend_since(self, since_utc: float) -> CostRow:
         """Total DBUs + est. USD on this warehouse since `since_utc`."""
