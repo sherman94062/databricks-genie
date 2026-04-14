@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.service.sql import StatementParameterListItem
 
 from .session_log import SessionLog
 
@@ -92,12 +93,12 @@ class CostReporter:
 
     def _execute(self, sql: str, params: dict[str, Any]) -> CostRow:
         parameters = [
-            {"name": k, "value": str(v)} for k, v in params.items()
+            StatementParameterListItem(name=k, value=str(v)) for k, v in params.items()
         ]
         stmt = self.w.statement_execution.execute_statement(
             warehouse_id=self.warehouse_id,
             statement=sql,
-            parameters=parameters,  # type: ignore[arg-type]
+            parameters=parameters,
             wait_timeout="30s",
         )
         sid = stmt.statement_id
