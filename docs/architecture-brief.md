@@ -59,12 +59,12 @@ Split by **audience and call pattern**, not by cost:
 - `cli genie-vs-warehouse` — prints the *replaceable* dollar figure so the decision is quantitative, not anecdotal
 - Streamlit UI with live cost/activity tab
 
-## Suggested Zepz rollout
+## Suggested rollout
 
-1. **Stand up Genie spaces per domain** (Payments, Compliance, Growth). SMEs curate example queries.
+1. **Stand up Genie spaces per domain** (e.g., Finance, Product, Ops). SMEs curate example queries.
 2. **Wrap a shared Python client library** (this repo's pattern) that adds: (a) trusted-query router, (b) session logging with statement_id, (c) cost attribution dashboards for FinOps.
 3. **Use Python agents where volume/cost-predictability matter** — scheduled risk scoring, customer-facing "ask your transaction history," etc.
 4. **Monitor weekly** via the `genie-vs-warehouse` report. Move the biggest LLM-cost questions into the trusted-query library first; only self-host NL→SQL for workloads where Genie LLM spend crosses a defined threshold (e.g., >$N/month).
 
 ---
-*Prepared by Mike Sherman · April 2026*
+*April 2026*

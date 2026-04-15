@@ -5,15 +5,12 @@
 This project explores and builds tooling around the **Databricks AI/BI Genie Conversation API**,
 with a dual purpose:
 
-1. **Personal learning** — deepen hands-on familiarity with Genie for use at a new Data Engineer
-   role at Zepz (starting soon), working under Drew Stooksberry (VP Engineering, Data).
+1. **Personal learning** — deepen hands-on familiarity with Genie for use in a Data Engineering
+   role.
 2. **Proof-of-concept agents** — demonstrate how purpose-built API agents can reduce Databricks
-   costs vs. open-ended Genie UI sessions, a priority given Zepz's cost-conscious culture.
+   costs vs. open-ended Genie UI sessions, relevant to any cost-conscious data organization.
 
-The developer (Mike Sherman) has 50+ years in technology, a strong Python background, deep
-Databricks experience (former Imply/Apache Druid support engineer, built Target's analytics
-platform), and has built multiple MCP servers and AI agent projects. Prefer concise, senior-level
-explanations — no hand-holding on fundamentals.
+Prefer concise, senior-level explanations — no hand-holding on fundamentals.
 
 ---
 
@@ -44,8 +41,7 @@ GENIE_SPACE_ID=<your-genie-space-id>   # set once first space is created
 - **Row limit**: Genie API returns a maximum of **5,000 rows** per query result.
 - **No account console**: Cannot create service principals on Free Edition. Use personal OAuth
   token (U2M) for all API calls during development.
-- **No commercial use**: This workspace is for learning/prototyping only. Production work happens
-  on Zepz's paid workspace.
+- **No commercial use**: This workspace is for learning/prototyping only.
 - **Poll interval**: Poll for query status every 1–5 seconds; timeout after 10 minutes.
 
 ---
@@ -68,10 +64,10 @@ GENIE_SPACE_ID=<your-genie-space-id>   # set once first space is created
 - [ ] Implement a **cost monitoring agent**: uses Genie pointed at `system.billing.usage` and
   `system.billing.list_prices` to answer spend questions in natural language
 
-### Phase 3 — Zepz Readiness
+### Phase 3 — Production Readiness
 - [ ] Document how to migrate from personal OAuth (U2M) to service principal (M2M) for production
 - [ ] Write a short architecture brief on how Genie API agents reduce warehouse compute vs. ad-hoc
-  Genie sessions — suitable for sharing with Drew / leadership
+  Genie sessions — suitable for sharing with engineering leadership
 - [ ] Explore embedding Genie into a simple Slack bot or FastAPI web app
 
 ---
@@ -193,13 +189,11 @@ pytest-mock
 
 ## Background Context for Claude Code Sessions
 
-- This is a **personal learning/portfolio project**, not yet production code
-- Zepz is a global money transfer company (formerly WorldRemit + Zepz) — a regulated fintech
-- Drew Stooksberry is Mike's new manager; he mentioned Genie specifically, so demonstrating
-  fluency with it early is a priority
-- The cost-monitoring use case (Phase 2) is likely to resonate most strongly at Zepz given the
-  cost-conscious culture Drew described
-- Mike has an existing GitHub portfolio at `sherman94062.github.io` — completed work here may
-  be added to that portfolio
-- Mike is familiar with MCP, has built Databricks and other MCP servers, and may want to wrap
-  the Genie client as an MCP tool in a future phase
+- This is a **personal learning/portfolio project**, not production code
+- The cost-monitoring use case (Phase 2) is a deliberate focus — Genie spend is a common
+  concern in data organizations, and quantifying it is the prerequisite to deciding whether
+  to keep LLM calls in Genie or move them to a self-hosted agent
+- The author has an existing GitHub portfolio at `sherman94062.github.io` — completed work
+  here may be added to that portfolio
+- The author is familiar with MCP and has built Databricks and other MCP servers; wrapping
+  the Genie client as an MCP tool is a possible future phase
